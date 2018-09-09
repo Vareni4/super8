@@ -1,13 +1,14 @@
-import os
-import requests
-import time
-from scipy.stats import expon
-from exceptions import PageParseException, PageNotFoundException
-import datetime as dt
-
-from objects.MatchTitle import MatchTitleInfo
-from objects.MatchInfoType import MatchInfoType
 import logging
+import os
+import time
+
+import requests
+from scipy.stats import expon
+
+from exceptions import PageParseException, PageNotFoundException
+from objects.MatchInfoType import MatchInfoType
+from objects.MatchTitle import MatchTitleInfo
+from utils import get_day_folder_path
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +26,8 @@ class Scraper():
 
     def scrape_upcoming_matches_list(self, days_after_today=1, hours_after_gmt=0):
 
-        path = self._get_tommorow_day_folder_path() + "/raw_upcoming_matches.txt"
+        path = get_day_folder_path(
+            days_diff=days_after_today) + "/raw_upcoming_matches.txt"
 
         url = f"https://d.soccer24.com/x/feed/f_1_{days_after_today}_{hours_after_gmt}_en_2"
 
@@ -37,16 +39,19 @@ class Scraper():
 
         return path
 
-    def scrape_upcoming_match_info(self, match_title: MatchTitleInfo, info_types=None):
+    def scrape_match_info(self, match_title: MatchTitleInfo, info_types=None,
+                          days_after_today=1):
 
         _info_types = info_types if info_types else (MatchInfoType.MATCH_SUMMARY,)
 
-        path = self._get_tommorow_day_folder_path() + "/" + "/".join([match_title.country,
-                                                                match_title.tournament,
-                                                                " - ".join([match_title.home_team_name,
-                                                                            match_title.guest_team_name,
-                                                                            match_title.s24_id])
-                                                                ])
+        path = get_day_folder_path(
+            days_diff=days_after_today) + "/" + "/".join([match_title.country,
+                                                          match_title.tournament,
+                                                          " - ".join([
+                                                                         match_title.home_team_name,
+                                                                         match_title.guest_team_name,
+                                                                         match_title.s24_id])
+                                                          ])
 
         match_id = match_title.s24_id
 
@@ -57,8 +62,8 @@ class Scraper():
                 self._scrape_and_persist(page_url, path + f"/{info_type.name.lower()}.txt")
 
                 logger.info(msg=f"Match {info_type.name} info scraped and persisted. "
-                                 f"Match id: {match_id}, "
-                                 f"Match Title: {match_title.home_team_name} - {match_title.guest_team_name}.")
+                                f"Match id: {match_id}, "
+                                f"Match Title: {match_title.home_team_name} - {match_title.guest_team_name}.")
 
 
 
@@ -70,12 +75,20 @@ class Scraper():
             except Exception:
                 raise
 
-
-    def _generate_info_url(self, match_title : MatchTitleInfo, info_type : MatchInfoType):
+    def _generate_info_url(self, match_title: MatchTitleInfo,
+                           info_type: MatchInfoType):
 
         match_id = match_title.s24_id
 
-        if info_type is MatchInfoType.H2H:
+        if info_type is MatchInfoType.RESULT:
+            return f"https://www.soccer24.com/match/{match_id}/#match-summary"
+        elif info_type is MatchInfoType.MATCH_SUMMARY:
+            return f"https://d.soccer24.com/x/feed/d_su_{match_id}_en_2"
+        elif info_type is MatchInfoType.STATS:
+            return f"https://d.soccer24.com/x/feed/d_st_{match_id}_en_2"
+        elif info_type is MatchInfoType.LINEUPS:
+            return f"https://d.soccer24.com/x/feed/d_li_{match_id}_en_2"
+        elif info_type is MatchInfoType.H2H:
             return f"https://d.soccer24.com/x/feed/d_hh_{match_id}_en_2"
         elif info_type is MatchInfoType.ODDS:
             return f"https://d.soccer24.com/x/feed/d_od_{match_id}_en_2"
@@ -86,13 +99,6 @@ class Scraper():
             return f"https://d.soccer24.com/x/feed/ss_2_{match_title.tournament_encoded}_" \
                    f"{match_title.tournament_stage_encoded}_draw_"
 
-
-    def _get_tommorow_day_folder_path(self):
-
-        tommorow_date_str = (dt.date.today() + dt.timedelta(days=1)).strftime("%Y_%m_%d")
-        path = f"/home/oleg/PycharmProjects/super8/data/{tommorow_date_str}"
-
-        return path
 
     def _scrape_and_persist(self, url, file_path):
         if os.path.exists(file_path):
@@ -106,10 +112,9 @@ class Scraper():
             return
         self._persist_scraped_text(text, file_path)
 
-
     def _scrape_page(self, url):
 
-        time_pause = expon.rvs(loc=0, scale=20)
+        time_pause = expon.rvs(loc=0, scale=5)
         time.sleep(time_pause)
 
         headers = self._generate_headers()
@@ -123,11 +128,10 @@ class Scraper():
             if req.status_code == 200:
                 break
 
-
         if req.status_code == 404:
             raise PageNotFoundException(f"Page not found. "
-                                     f"Request status code: {req.status_code}. "
-                                     f"URL: {url}")
+                                        f"Request status code: {req.status_code}. "
+                                        f"URL: {url}")
 
         if req.status_code != 200:
             raise PageParseException(f"Unable to parse page. "
@@ -143,16 +147,7 @@ class Scraper():
 
         open(file_path, 'w').write(text)
 
-
     def _generate_headers(self):
         headers = {"x-fsign": "SW9D1eZo"}
 
         return headers
-
-
-if __name__ == '__main__':
-    prs = Scraper()
-    try:
-        path = prs.scrape_upcoming_matches_list()
-    except Exception:
-        raise

@@ -1,9 +1,12 @@
 from enum import Enum
 
-class MatchInfoType(Enum):
-    MATCH_SUMMARY=0
-    H2H=1,
-    ODDS=2,
-    STANDINGS=3,
-    DRAW=4
 
+class MatchInfoType(Enum):
+    RESULT = 0,
+    MATCH_SUMMARY = 1,
+    STATS = 2,
+    LINEUPS = 3,
+    H2H = 4,
+    ODDS = 5,
+    STANDINGS = 6,
+    DRAW = 7
